@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>보안 주간업무 통합 관리 및 보고 시스템</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Progress & Visuals -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- CryptoJS for AES-256 E2EE Client-Side Encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        security: {
+                            red: '#ef4444',
+                            amber: '#f59e0b',
+                            emerald: '#10b981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+        /* Dynamic Confidential Watermark */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 5rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.02);
+            pointer-events: none;
+            user-select: none;
+            z-index: 9999;
+            white-space: nowrap;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Watermark for Security -->
+    <div class="watermark" id="securityWatermark">CONFIDENTIAL • INTERNAL ONLY</div>
+
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-brand-600/20 text-brand-500 rounded-lg border border-brand-500/30">
+                    <i class="fa-solid fa-shield-halved text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        보안 주간업무 통합 시스템
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-red-400">보안 2등급</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">프로젝트 진척도 모니터링 & 주간 업무 종합</p>
+                </div>
+            </div>
+
+            <!-- Role Selector & User Info -->
+            <div class="flex items-center space-x-4">
+                <div class="hidden sm:flex items-center px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300">
+                    <i class="fa-solid fa-lock text-emerald-400 mr-2"></i>
+                    <span id="sessionStatus">AES-256 E2EE 보안 적용</span>
+                </div>
+
+                <!-- Mode Switcher -->
+                <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+                    <button id="roleMemberBtn" onclick="switchRole('MEMBER')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 bg-brand-600 text-white shadow">
+                        <i class="fa-solid fa-user-pen mr-1"></i> 담당자 모드
+                    </button>
+                    <button id="roleAdminBtn" onclick="switchRole('ADMIN')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-user-shield mr-1"></i> 관리자(취합) 모드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        
+        <!-- Top Banner / Notice -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-xl bg-slate-900 border border-slate-800 gap-4">
+            <div class="flex items-center space-x-3">
+                <div id="roleBadgeIcon" class="p-2.5 bg-blue-500/10 text-blue-400 rounded-lg">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 id="currentRoleTitle" class="font-bold text-white">담당자(Member) 접속 중</h2>
+                        <span id="currentUserTag" class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">작성자 권한</span>
+                    </div>
+                    <p id="currentRoleDesc" class="text-xs text-slate-400 mt-0.5">할당된 프로젝트의 금주 진행 실적과 차주 계획을 작성할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 w-full sm:w-auto">
+                <button onclick="openModal('modalProjectNew')" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-folder-plus text-brand-500"></i>
+                    <span>+ 새 프로젝트 등록</span>
+                </button>
+                <button id="btnNewReport" onclick="switchTab('tabReportForm')" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-lg shadow-brand-600/20">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>주간업무 작성</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-slate-800 flex space-x-6 overflow-x-auto text-sm">
+            <button id="tabBtnDashboard" onclick="switchTab('tabDashboard')" class="pb-3 font-semibold border-b-2 border-brand-500 text-brand-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-chart-pie"></i> 진척도 대시보드
+            </button>
+            <button id="tabBtnReports" onclick="switchTab('tabReportsList')" class="pb-3 font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-list-check"></i> 주간업무 목록 & 검색
+            </button>
+            <button id="tabBtnReportForm" onclick="switchTab('tabReportForm')" class="pb-3 font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-plus"></i> 업무보고 작성
+            </button>
+            <button id="tabBtnExecutive" onclick="switchTab('tabExecutive')" class="pb-3 font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap text-amber-400">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> 종합 취합 및 보고서 생성
+            </button>
+            <button id="tabBtnSecurity" onclick="switchTab('tabSecurity')" class="pb-3 font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-user-lock"></i> 보안 및 접근 로그
+            </button>
+        </div>
+
+        <div id="tabDashboard" class="space-y-6">
+            <!-- Metrics Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">전체 진행 프로젝트</p>
+                        <p id="metricTotalProjects" class="text-2xl font-bold text-white mt-1">0</p>
+                    </div>
+                    <div class="p-3 bg-blue-500/10 text-blue-400 rounded-lg">
+                        <i class="fa-solid fa-diagram-project text-xl"></i>
+                    </div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">평균 종합 진척도</p>
+                        <p id="metricAvgProgress" class="text-2xl font-bold text-emerald-400 mt-1">0%</p>
+                    </div>
+                    <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                        <i class="fa-solid fa-chart-line text-xl"></i>
+                    </div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">이번주 제출된 보고서</p>
+                        <p id="metricSubmittedReports" class="text-2xl font-bold text-brand-400 mt-1">0건</p>
+                    </div>
+                    <div class="p-3 bg-brand-500/10 text-brand-400 rounded-lg">
+                        <i class="fa-solid fa-file-circle-check text-xl"></i>
+                    </div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">이슈/지연 프로젝트</p>
+                        <p id="metricDelayedProjects" class="text-2xl font-bold text-amber-400 mt-1">0</p>
+                    </div>
+                    <div class="p-3 bg-amber-500/10 text-amber-400 rounded-lg">
+                        <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+                            <i class="fa-solid fa-chart-bar text-brand-500"></i> 프로젝트별 진척률 현황 (%)
+                        </h3>
+                        <span class="text-xs text-slate-400">실시간 반영</span>
+                    </div>
+                    <div class="h-64 w-full relative">
+                        <canvas id="progressChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                    <h3 class="font-bold text-white text-base mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-pie-chart text-emerald-500"></i> 상태별 상태 분포
+                    </h3>
+                    <div class="h-64 w-full relative flex items-center justify-center">
+                        <canvas id="statusPieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Progress Grid -->
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-folder-open text-brand-400"></i> 프로젝트 현황 및 담당자 목록
+                    </h3>
+                    <span class="text-xs text-slate-400">담당자가 직접 신규 프로젝트를 등록할 수 있습니다.</span>
+                </div>
+                
+                <div id="projectCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Dynamic project cards will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <div id="tabReportsList" class="hidden space-y-6">
+            <!-- Filter Bar -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row gap-3 items-center justify-between">
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <!-- Project Select -->
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">프로젝트 필터</label>
+                        <select id="filterProject" onchange="renderReportsList()" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-brand-500 focus:border-brand-500">
+                            <option value="ALL">전체 프로젝트</option>
+                        </select>
+                    </div>
+                    <!-- Author Select -->
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">작성자 필터</label>
+                        <input type="text" id="filterAuthor" oninput="renderReportsList()" placeholder="작성자 이름 검색" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-brand-500 focus:border-brand-500 w-36">
+                    </div>
+                    <!-- Week Select -->
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">보고 주차</label>
+                        <input type="week" id="filterWeek" onchange="renderReportsList()" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                    <button onclick="resetFilters()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs border border-slate-700">
+                        <i class="fa-solid fa-rotate mr-1"></i> 필터 초기화
+                    </button>
+                    <button onclick="exportToCSV()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold border border-emerald-500/30 flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> 엑셀(CSV) 내보내기
+                    </button>
+                </div>
+            </div>
+
+            <!-- Reports List Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950 text-slate-400 font-medium uppercase tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-3.5">주차 / 작성일</th>
+                                <th class="p-3.5">프로젝트</th>
+                                <th class="p-3.5">담당자</th>
+                                <th class="p-3.5">금주 진행 실적</th>
+                                <th class="p-3.5">차주 계획</th>
+                                <th class="p-3.5">진척도 / 상태</th>
+                                <th class="p-3.5 text-center">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportsTableBody" class="divide-y divide-slate-800/60">
+                            <!-- Dynamic report rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabReportForm" class="hidden max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-pen-nib text-brand-500"></i> 주간 업무 보고서 작성
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">해당 주에 수행한 실적과 다음 주 수행 예정인 계획을 작성하세요.</p>
+            </div>
+
+            <form id="reportForm" onsubmit="handleReportSubmit(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Project Selection -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1.5">프로젝트 <span class="text-red-400">*</span></label>
+                        <select id="formProjectId" required class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                            <option value="">프로젝트를 선택하세요</option>
+                        </select>
+                    </div>
+
+                    <!-- Author Name -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1.5">담당자 이름 <span class="text-red-400">*</span></label>
+                        <input type="text" id="formAuthor" required placeholder="예: 홍길동 책임" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    </div>
+
+                    <!-- Week Date Range -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1.5">해당 주차 선택 <span class="text-red-400">*</span></label>
+                        <input type="week" id="formWeek" required class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    </div>
+
+                    <!-- Individual Progress Update % -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1.5">현재 개인 담당부분 진척률 (%)</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="number" id="formProgress" min="0" max="100" placeholder="0 - 100" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                            <span class="text-xs text-slate-400">%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- This Week Work -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">금주 업무 실적 (This Week Work) <span class="text-red-400">*</span></label>
+                    <textarea id="formThisWeek" required rows="4" placeholder="- 주요 완료 사항 1&#10;- 진행 내용 2&#10;- 협의 결과 3" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg p-3 focus:ring-2 focus:ring-brand-500 focus:outline-none leading-relaxed"></textarea>
+                </div>
+
+                <!-- Next Week Plan -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">차주 업무 계획 (Next Week Plan) <span class="text-red-400">*</span></label>
+                    <textarea id="formNextWeek" required rows="4" placeholder="- 다음 주 예정 작업 1&#10;- 단위 테스트 및 검동 2" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg p-3 focus:ring-2 focus:ring-brand-500 focus:outline-none leading-relaxed"></textarea>
+                </div>
+
+                <!-- Issues & Blockers -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">특이사항 / 지연요인 / 건의사항 (선택)</label>
+                    <textarea id="formIssues" rows="2" placeholder="이슈나 리스크, 다른 팀과의 협조 요청사항이 있다면 작성해주세요." class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg p-3 focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+                </div>
+
+                <!-- Security Confirmation Checklist -->
+                <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 flex items-start space-x-2">
+                    <input type="checkbox" id="formSecCheck" required class="mt-0.5 rounded bg-slate-800 border-slate-700 text-brand-600 focus:ring-brand-500">
+                    <label for="formSecCheck" class="text-xs text-slate-400">
+                        [보안 서약] 제출하는 내용에 기밀 유출 가능성이 있는 대외비 비밀번호, 인증키, 고객 개인정보가 포함되어 있지 않음을 확인합니다.
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-end space-x-3 pt-2">
+                    <button type="button" onclick="switchTab('tabDashboard')" class="px-4 py-2.5 rounded-lg border border-slate-700 text-slate-300 text-xs font-medium hover:bg-slate-800">
+                        취소
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-600/20">
+                        <i class="fa-solid fa-paper-plane mr-1.5"></i> 주간업무 제출하기
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="tabExecutive" class="hidden space-y-6">
+            <div class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950 border border-indigo-500/30 rounded-xl p-6 shadow-xl">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
+                    <div>
+                        <span class="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold">관리자 전용 취합 모듈</span>
+                        <h2 class="text-xl font-bold text-white mt-1 flex items-center gap-2">
+                            <i class="fa-solid fa-layer-group text-amber-400"></i> 전체 프로젝트 주간 업무 통합 보고서 생성기
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">여러 담당자가 각각 입력한 개별 주간 업무를 프로젝트별로 자동 취합하여 보고용 요약문 형태로 생성합니다.</p>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">취합 대상 주차</label>
+                            <input type="week" id="execFilterWeek" onchange="generateExecutiveSummary()" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2">
+                        </div>
+                        <button onclick="copyExecutiveSummary()" class="mt-5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs shadow-lg flex items-center gap-1.5">
+                            <i class="fa-solid fa-copy"></i> 전체 요약문 복사
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Generated Output Area -->
+                <div class="mt-6">
+                    <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                        <span>보고서 미리보기 (경영진/총괄 보고용)</span>
+                        <span id="execReportMeta">취합건수: 0건</span>
+                    </div>
+                    <textarea id="executiveOutput" readonly rows="16" class="w-full bg-slate-950 border border-slate-800 font-mono text-xs text-slate-200 p-4 rounded-xl leading-relaxed focus:outline-none selection:bg-amber-500/30"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabSecurity" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Security Settings Panel -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <h3 class="font-bold text-white text-base flex items-center gap-2 border-b border-slate-800 pb-3">
+                        <i class="fa-solid fa-lock text-red-400"></i> 보안 및 암호화 설정
+                    </h3>
+                    
+                    <!-- AES Encryption Key Input -->
+                    <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-semibold text-emerald-400">
+                                <i class="fa-solid fa-key mr-1"></i> 데이터 복호화 보안키 (Passphrase)
+                            </label>
+                            <span class="text-[10px] text-slate-400 bg-emerald-500/10 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/20">AES-256</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="password" id="inputSecretKey" value="SecuReport2026!#" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 w-full font-mono">
+                            <button onclick="updateSecretKey()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs text-white rounded-lg font-medium whitespace-nowrap">
+                                적용
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400">이 보안키로 데이터가 브라우저에서 암호화되어 DB에 저장됩니다. (올바른 키 입력 시에만 내용이 복호화됨)</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">관리자 PIN 비밀번호 설정</label>
+                        <div class="flex gap-2">
+                            <input type="password" id="inputAdminPin" value="1234" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 w-full">
+                            <button onclick="updateAdminPin()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 rounded-lg border border-slate-700 font-medium">
+                                변경
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1">기본 PIN: 1234 (관리자 전환 시 요구됨)</p>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-800">
+                        <label class="block text-xs text-slate-400 mb-1">워터마크 표시 설정</label>
+                        <select id="watermarkToggle" onchange="toggleWatermark(this.value)" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2">
+                            <option value="CONFIDENTIAL • INTERNAL ONLY">대외비 (CONFIDENTIAL)</option>
+                            <option value="TOP SECRET • DO NOT DISTRIBUTE">극비 (TOP SECRET)</option>
+                            <option value="OFF">워터마크 비활성화</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-800">
+                        <button onclick="clearAllDataConfirm()" class="w-full py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 rounded-lg text-xs font-semibold transition">
+                            <i class="fa-solid fa-trash-can mr-1"></i> 전체 데이터 초기화 (관리자)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Access & Audit Logs Table -->
+                <div class="md:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-blue-400"></i> 보안 및 시스템 작업 감사 로그 (Audit Trail)
+                        </h3>
+                        <span class="text-xs text-slate-400">최근 20개 이벤트 기록</span>
+                    </div>
+
+                    <div class="overflow-x-auto max-h-80">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="p-2.5">일시</th>
+                                    <th class="p-2.5">사용자/역할</th>
+                                    <th class="p-2.5">수행 작업</th>
+                                    <th class="p-2.5">상세 내용</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditLogsTableBody" class="divide-y divide-slate-800/60 font-mono text-[11px]">
+                                <!-- Dynamic Logs -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal: New Project Registration -->
+    <div id="modalProjectNew" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-folder-plus text-brand-500"></i> 신규 프로젝트 등록
+                </h3>
+                <button onclick="closeModal('modalProjectNew')" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleProjectSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">프로젝트 명칭 <span class="text-red-400">*</span></label>
+                    <input type="text" id="newProjName" required placeholder="예: 차세대 보안 시스템 구축" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">프로젝트 개요 / 개요 설명</label>
+                    <textarea id="newProjDesc" rows="2" placeholder="프로젝트 목적 및 핵심 범위" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg p-3 focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">총괄/주 담당자</label>
+                        <input type="text" id="newProjLead" placeholder="예: 김철수 팀장" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">초기 진척률 (%)</label>
+                        <input type="number" id="newProjProgress" min="0" max="100" value="0" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">초기 상태 설정</label>
+                    <select id="newProjStatus" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2">
+                        <option value="ON_TRACK">정상 진행 (On Track)</option>
+                        <option value="DELAYED">지연 / 우려 (Delayed)</option>
+                        <option value="COMPLETED">완료 (Completed)</option>
+                    </select>
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3">
+                    <button type="button" onclick="closeModal('modalProjectNew')" class="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 text-xs hover:bg-slate-800">취소</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold">프로젝트 생성</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Admin PIN Authentication Prompt -->
+    <div id="modalAdminAuth" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div class="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/30">
+                <i class="fa-solid fa-key text-xl"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">관리자 인증</h3>
+                <p class="text-xs text-slate-400 mt-1">취합 및 전체 관리를 위해 PIN 비밀번호를 입력하세요.</p>
+            </div>
+
+            <form onsubmit="verifyAdminPin(event)" class="space-y-3">
+                <input type="password" id="authPinInput" placeholder="PIN 번호 입력" autofocus required class="w-full text-center tracking-widest text-lg bg-slate-800 border border-slate-700 text-slate-100 rounded-lg py-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <p id="authErrorMessage" class="text-xs text-red-400 hidden">비밀번호가 일치하지 않습니다.</p>
+                <div class="flex space-x-2 pt-2">
+                    <button type="button" onclick="closeModal('modalAdminAuth')" class="w-1/2 py-2 rounded-lg border border-slate-700 text-slate-300 text-xs">취소</button>
+                    <button type="submit" class="w-1/2 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs">확인</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-900 border border-slate-700 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all duration-300 opacity-0 translate-y-10 pointer-events-none">
+        <div id="toastIcon" class="text-brand-500"><i class="fa-solid fa-circle-info text-lg"></i></div>
+        <div id="toastText" class="text-xs font-medium">메시지 내용</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+
+        // Global Application State
+        window.appState = {
+            role: 'MEMBER', // 'MEMBER' or 'ADMIN'
+            adminPin: '1234',
+            secretKey: 'SecuReport2026!#', // Default Workspace Encryption Key
+            projects: [],
+            reports: [],
+            logs: [],
+            charts: {
+                progress: null,
+                pie: null
+            }
+        };
+
+        // AES-256 Client-Side Encryption & Decryption Helpers
+        window.encryptText = function(plainText) {
+            if (!plainText || !window.appState.secretKey) return plainText;
+            try {
+                const ciphertext = CryptoJS.AES.encrypt(plainText, window.appState.secretKey).toString();
+                return 'ENC:' + ciphertext;
+            } catch (e) {
+                console.error("Encryption error:", e);
+                return plainText;
+            }
+        };
+
+        window.decryptText = function(cipherText) {
+            if (!cipherText) return '';
+            if (typeof cipherText !== 'string' || !cipherText.startsWith('ENC:')) return cipherText; // Plaintext fallback
+            try {
+                const rawCipher = cipherText.substring(4);
+                const bytes = CryptoJS.AES.decrypt(rawCipher, window.appState.secretKey);
+                const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                return decrypted || '[🔒 암호화 해독 실패 - 보안키 불일치]';
+            } catch (e) {
+                return '[🔒 암호화 해독 실패 - 보안키 불일치]';
+            }
+        };
+
+        const initialProjects = [
+            {
+                id: 'proj-1',
+                name: '보안 클라우드 마이그레이션',
+                desc: '사내 온프레미스 서버의 AWS 보안 VPC 환경 이전 작업',
+                lead: '김철수 팀장',
+                progress: 65,
+                status: 'ON_TRACK',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: 'proj-2',
+                name: '차세대 모바일 앱 구축',
+                desc: '고객용 모바일 앱 UI/UX 전면 개편 및 보안 인증 강화',
+                lead: '이영희 수석',
+                progress: 40,
+                status: 'DELAYED',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: 'proj-3',
+                name: 'AI 기반 데이터 분석 파이프라인',
+                desc: '주간 업무 수집 데이터의 자동 요약 및 모니터링 엔진 구축',
+                lead: '박민수 책임',
+                progress: 90,
+                status: 'ON_TRACK',
+                createdAt: new Date().toISOString()
+            }
+        ];
+
+        const initialReports = [
+            {
+                id: 'rep-1',
+                projectId: 'proj-1',
+                projectName: '보안 클라우드 마이그레이션',
+                author: '김철수',
+                week: getCurrentWeekString(),
+                progress: 65,
+                thisWeek: '- 보안 그룹 정책 설정 완료\n- DB 데이터 이전 테스트 수행 (성공)\n- 방화벽 2차 검증 완료',
+                nextWeek: '- 스테이징 환경 본 서버 오픈 준비\n- 부하 테스트 및 보안성 심사 응시',
+                issues: '네트워크 대역폭 확장 건으로 아키텍처팀 협의 필요',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: 'rep-2',
+                projectId: 'proj-2',
+                projectName: '차세대 모바일 앱 구축',
+                author: '이영희',
+                week: getCurrentWeekString(),
+                progress: 40,
+                thisWeek: '- 로그인 화면 및 생체 인증 모듈 API 연동\n- 메인 대시보드 와이어프레임 설계',
+                nextWeek: '- iOS/Android 보안 검증 키 적용\n- 디자인 시스템 최종 확정',
+                issues: '외부 인증 API 연동 지연으로 일정 3일 연구 필요',
+                createdAt: new Date().toISOString()
+            }
+        ];
+
+        async function initFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                logAudit('SYSTEM', '세션 연결', 'Firebase 데이터베이스 및 인증 접속 완료');
+
+                // Subscribe to Projects Collection
+                const projectsCol = collection(db, 'artifacts', appId, 'public', 'data', 'projects');
+                onSnapshot(projectsCol, (snapshot) => {
+                    let items = [];
+                    snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+                    if (items.length === 0) {
+                        // Seed initial demo projects
+                        initialProjects.forEach(p => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', p.id), p));
+                    } else {
+                        window.appState.projects = items;
+                        updateAllUI();
+                    }
+                }, (error) => {
+                    console.warn("Firestore access fallback to local memory state:", error);
+                    window.appState.projects = initialProjects;
+                    updateAllUI();
+                });
+
+                // Subscribe to Reports Collection
+                const reportsCol = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
+                onSnapshot(reportsCol, (snapshot) => {
+                    let items = [];
+                    snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+                    if (items.length === 0) {
+                        initialReports.forEach(r => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', r.id), r));
+                    } else {
+                        window.appState.reports = items;
+                        updateAllUI();
+                    }
+                }, (error) => {
+                    console.warn("Reports fallback to local memory state:", error);
+                    window.appState.reports = initialReports;
+                    updateAllUI();
+                });
+
+            } catch (err) {
+                console.warn("Firebase Init failed, proceeding in offline mode:", err);
+                window.appState.projects = initialProjects;
+                window.appState.reports = initialReports;
+                updateAllUI();
+            }
+        }
+
+        function getCurrentWeekString() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const firstDayOfYear = new Date(year, 0, 1);
+            const pastDaysOfYear = (now - firstDayOfYear) / 86400000;
+            const weekNum = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+            return `${year}-W${weekNum < 10 ? '0' + weekNum : weekNum}`;
+        }
+
+        window.showToast = function(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastText = document.getElementById('toastText');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastText.textContent = message;
+            if (type === 'success') {
+                toastIcon.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>`;
+            } else if (type === 'error') {
+                toastIcon.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-400 text-lg"></i>`;
+            } else {
+                toastIcon.innerHTML = `<i class="fa-solid fa-circle-info text-brand-400 text-lg"></i>`;
+            }
+
+            toast.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+            }, 3000);
+        };
+
+        window.logAudit = function(user, action, details) {
+            const logEntry = {
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+                user: user,
+                action: action,
+                details: details
+            };
+            window.appState.logs.unshift(logEntry);
+            if (window.appState.logs.length > 30) window.appState.logs.pop();
+            renderAuditLogs();
+        };
+
+        function renderAuditLogs() {
+            const tbody = document.getElementById('auditLogsTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = window.appState.logs.map(log => `
+                <tr class="hover:bg-slate-800/40 transition">
+                    <td class="p-2.5 text-slate-400">${log.timestamp}</td>
+                    <td class="p-2.5 font-semibold ${log.user === 'ADMIN' ? 'text-amber-400' : 'text-brand-400'}">${log.user}</td>
+                    <td class="p-2.5 text-slate-200">${log.action}</td>
+                    <td class="p-2.5 text-slate-400">${log.details}</td>
+                </tr>
+            `).join('');
+        }
+
+        window.switchRole = function(targetRole) {
+            if (targetRole === 'ADMIN' && window.appState.role !== 'ADMIN') {
+                // Require PIN authentication for Admin Mode
+                openModal('modalAdminAuth');
+            } else {
+                setRole(targetRole);
+            }
+        };
+
+        window.verifyAdminPin = function(e) {
+            e.preventDefault();
+            const pinInput = document.getElementById('authPinInput').value;
+            const errMsg = document.getElementById('authErrorMessage');
+
+            if (pinInput === window.appState.adminPin) {
+                errMsg.classList.add('hidden');
+                closeModal('modalAdminAuth');
+                document.getElementById('authPinInput').value = '';
+                setRole('ADMIN');
+                showToast('관리자(취합) 모드로 변경되었습니다.', 'success');
+            } else {
+                errMsg.classList.remove('hidden');
+            }
+        };
+
+        function setRole(role) {
+            window.appState.role = role;
+            const memberBtn = document.getElementById('roleMemberBtn');
+            const adminBtn = document.getElementById('roleAdminBtn');
+            const roleTitle = document.getElementById('currentRoleTitle');
+            const roleTag = document.getElementById('currentUserTag');
+            const roleDesc = document.getElementById('currentRoleDesc');
+            const roleBadgeIcon = document.getElementById('roleBadgeIcon');
+
+            if (role === 'ADMIN') {
+                memberBtn.className = "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 text-slate-400 hover:text-white";
+                adminBtn.className = "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 bg-amber-500 text-slate-950 font-bold shadow";
+                
+                roleTitle.textContent = "관리자 (Administrator / 취합자)";
+                roleTag.textContent = "전체 관리 권한";
+                roleTag.className = "text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 font-semibold";
+                roleDesc.textContent = "모든 프로젝트의 종합 진척도를 모니터링하고 주간 보고서를 한꺼번에 취합/수정할 수 있습니다.";
+                roleBadgeIcon.className = "p-2.5 bg-amber-500/10 text-amber-400 rounded-lg";
+                roleBadgeIcon.innerHTML = `<i class="fa-solid fa-user-shield text-lg"></i>`;
+
+                logAudit('ADMIN', '권한 전환', '관리자(취합자) 모드 세션 시작');
+            } else {
+                adminBtn.className = "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 text-slate-400 hover:text-white";
+                memberBtn.className = "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 bg-brand-600 text-white shadow";
+
+                roleTitle.textContent = "담당자 (Team Member) 접속 중";
+                roleTag.textContent = "작성자 권한";
+                roleTag.className = "text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700";
+                roleDesc.textContent = "할당된 프로젝트의 금주 진행 실적과 차주 계획을 작성할 수 있습니다.";
+                roleBadgeIcon.className = "p-2.5 bg-blue-500/10 text-blue-400 rounded-lg";
+                roleBadgeIcon.innerHTML = `<i class="fa-solid fa-user text-lg"></i>`;
+
+                logAudit('MEMBER', '권한 전환', '담당자 일반 모드 세션 시작');
+            }
+            updateAllUI();
+        }
+
+        // Navigation Tabs switching
+        window.switchTab = function(tabId) {
+            const tabs = ['tabDashboard', 'tabReportsList', 'tabReportForm', 'tabExecutive', 'tabSecurity'];
+            tabs.forEach(t => {
+                const el = document.getElementById(t);
+                const btn = document.getElementById('tabBtn' + t.replace('tab', ''));
+                if (t === tabId) {
+                    el.classList.remove('hidden');
+                    if (btn) {
+                        btn.classList.add('border-brand-500', 'text-brand-400', 'font-semibold');
+                        btn.classList.remove('border-transparent', 'text-slate-400');
+                    }
+                } else {
+                    el.classList.add('hidden');
+                    if (btn) {
+                        btn.classList.remove('border-brand-500', 'text-brand-400', 'font-semibold');
+                        btn.classList.add('border-transparent', 'text-slate-400');
+                    }
+                }
+            });
+
+            if (tabId === 'tabExecutive') {
+                generateExecutiveSummary();
+            }
+        };
+
+        function updateAllUI() {
+            renderMetrics();
+            renderProjectCards();
+            populateProjectDropdowns();
+            renderReportsList();
+            renderCharts();
+        }
+
+        function renderMetrics() {
+            const projects = window.appState.projects;
+            const reports = window.appState.reports;
+            const currentWeek = getCurrentWeekString();
+
+            document.getElementById('metricTotalProjects').textContent = projects.length;
+
+            const avgProgress = projects.length > 0
+                ? Math.round(projects.reduce((acc, p) => acc + (Number(p.progress) || 0), 0) / projects.length)
+                : 0;
+            document.getElementById('metricAvgProgress').textContent = `${avgProgress}%`;
+
+            const thisWeekReports = reports.filter(r => r.week === currentWeek);
+            document.getElementById('metricSubmittedReports').textContent = `${thisWeekReports.length}건`;
+
+            const delayed = projects.filter(p => p.status === 'DELAYED').length;
+            document.getElementById('metricDelayedProjects').textContent = delayed;
+        }
+
+        function renderProjectCards() {
+            const container = document.getElementById('projectCardsContainer');
+            if (!container) return;
+
+            if (window.appState.projects.length === 0) {
+                container.innerHTML = `<div class="col-span-full p-8 text-center text-slate-500 text-xs">등록된 프로젝트가 없습니다. "+ 새 프로젝트 등록" 버튼을 눌러 추가하세요.</div>`;
+                return;
+            }
+
+            container.innerHTML = window.appState.projects.map(p => {
+                const statusBadge = p.status === 'COMPLETED' 
+                    ? `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">완료</span>`
+                    : p.status === 'DELAYED'
+                    ? `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">지연/이슈</span>`
+                    : `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">정상진행</span>`;
+
+                const recentReportsCount = window.appState.reports.filter(r => r.projectId === p.id).length;
+
+                return `
+                    <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-5 space-y-3 transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-start justify-between gap-2">
+                                <h4 class="font-bold text-slate-100 text-sm tracking-wide">${p.name}</h4>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1.5 line-clamp-2">${p.desc || '설명 없음'}</p>
+                        </div>
+
+                        <div class="space-y-2 pt-2 border-t border-slate-800/80">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">총괄/담당: <strong class="text-slate-200 font-medium">${p.lead || '미정'}</strong></span>
+                                <span class="text-slate-400">진척률: <strong class="text-emerald-400 font-bold">${p.progress}%</strong></span>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div class="bg-gradient-to-r from-brand-500 to-emerald-400 h-2 rounded-full transition-all duration-500" style="width: ${p.progress}%"></div>
+                            </div>
+
+                            <div class="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+                                <span>누적 주간보고: ${recentReportsCount}건</span>
+                                ${window.appState.role === 'ADMIN' ? `
+                                    <button onclick="promptEditProgress('${p.id}', ${p.progress})" class="text-brand-400 hover:underline">
+                                        <i class="fa-solid fa-pen"></i> 진척률 수정
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderCharts() {
+            const projects = window.appState.projects;
+            
+            // Bar Chart - Progress per project
+            const barCtx = document.getElementById('progressChart')?.getContext('2d');
+            if (barCtx) {
+                if (window.appState.charts.progress) window.appState.charts.progress.destroy();
+
+                window.appState.charts.progress = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: projects.map(p => p.name.length > 10 ? p.name.substring(0, 10) + '...' : p.name),
+                        datasets: [{
+                            label: '진척률 (%)',
+                            data: projects.map(p => p.progress),
+                            backgroundColor: '#0ea5e9',
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { min: 0, max: 100, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+            }
+
+            // Pie Chart - Status distribution
+            const pieCtx = document.getElementById('statusPieChart')?.getContext('2d');
+            if (pieCtx) {
+                if (window.appState.charts.pie) window.appState.charts.pie.destroy();
+
+                const onTrack = projects.filter(p => p.status === 'ON_TRACK').length;
+                const delayed = projects.filter(p => p.status === 'DELAYED').length;
+                const completed = projects.filter(p => p.status === 'COMPLETED').length;
+
+                window.appState.charts.pie = new Chart(pieCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['정상 진행', '지연/이슈', '완료'],
+                        datasets: [{
+                            data: [onTrack, delayed, completed],
+                            backgroundColor: ['#0ea5e9', '#f59e0b', '#10b981'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function populateProjectDropdowns() {
+            const projSelects = [document.getElementById('formProjectId'), document.getElementById('filterProject')];
+            projSelects.forEach(sel => {
+                if (!sel) return;
+                const currentVal = sel.value;
+                const isFilter = sel.id === 'filterProject';
+
+                sel.innerHTML = isFilter 
+                    ? `<option value="ALL">전체 프로젝트</option>`
+                    : `<option value="">프로젝트를 선택하세요</option>`;
+
+                window.appState.projects.forEach(p => {
+                    sel.innerHTML += `<option value="${p.id}">${p.name} (${p.lead || '담당자미정'})</option>`;
+                });
+
+                sel.value = currentVal;
+            });
+
+            // Set current week default on week pickers
+            const curWeek = getCurrentWeekString();
+            if (!document.getElementById('formWeek').value) document.getElementById('formWeek').value = curWeek;
+            if (!document.getElementById('execFilterWeek').value) document.getElementById('execFilterWeek').value = curWeek;
+        }
+
+        window.renderReportsList = function() {
+            const tbody = document.getElementById('reportsTableBody');
+            if (!tbody) return;
+
+            const projFilter = document.getElementById('filterProject')?.value || 'ALL';
+            const authorFilter = (document.getElementById('filterAuthor')?.value || '').toLowerCase();
+            const weekFilter = document.getElementById('filterWeek')?.value;
+
+            let filtered = window.appState.reports.filter(r => {
+                if (projFilter !== 'ALL' && r.projectId !== projFilter) return false;
+                if (authorFilter && !r.author.toLowerCase().includes(authorFilter)) return false;
+                if (weekFilter && r.week !== weekFilter) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-500">해당 조건에 맞는 주간 업무 작성 내역이 없습니다.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(r => {
+                const decryptedThisWeek = decryptText(r.thisWeek);
+                const decryptedNextWeek = decryptText(r.nextWeek);
+                const decryptedIssues = decryptText(r.issues);
+                const isEnc = r.thisWeek && r.thisWeek.startsWith('ENC:');
+
+                return `
+                <tr class="hover:bg-slate-800/40 transition">
+                    <td class="p-3.5 whitespace-nowrap">
+                        <span class="font-semibold text-brand-400">${r.week}</span>
+                        ${isEnc ? `<span class="ml-1 text-[10px] text-emerald-400" title="AES-256 암호화 저장됨"><i class="fa-solid fa-shield-halved"></i></span>` : ''}
+                        <div class="text-[10px] text-slate-500">${new Date(r.createdAt).toLocaleDateString()}</div>
+                    </td>
+                    <td class="p-3.5 font-medium text-slate-100">${r.projectName}</td>
+                    <td class="p-3.5 font-medium text-slate-300 whitespace-nowrap"><i class="fa-regular fa-user mr-1 text-slate-500"></i>${r.author}</td>
+                    <td class="p-3.5 max-w-xs whitespace-pre-wrap leading-relaxed ${decryptedThisWeek.includes('해독 실패') ? 'text-red-400 font-mono text-[11px]' : 'text-slate-300'}">${decryptedThisWeek}</td>
+                    <td class="p-3.5 max-w-xs whitespace-pre-wrap leading-relaxed ${decryptedNextWeek.includes('해독 실패') ? 'text-red-400 font-mono text-[11px]' : 'text-slate-300'}">${decryptedNextWeek}</td>
+                    <td class="p-3.5 whitespace-nowrap">
+                        <span class="font-bold text-emerald-400">${r.progress}%</span>
+                        ${r.issues ? `<div class="text-[10px] text-amber-400 mt-1 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> 이슈발생</div>` : ''}
+                    </td>
+                    <td class="p-3.5 text-center whitespace-nowrap">
+                        ${(window.appState.role === 'ADMIN' || r.author === '본인') ? `
+                            <button onclick="deleteReport('${r.id}')" class="text-red-400 hover:text-red-300 p-1 rounded hover:bg-slate-800">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        ` : '<span class="text-slate-600">-</span>'}
+                    </td>
+                </tr>
+            `}).join('');
+        };
+
+        window.resetFilters = function() {
+            if (document.getElementById('filterProject')) document.getElementById('filterProject').value = 'ALL';
+            if (document.getElementById('filterAuthor')) document.getElementById('filterAuthor').value = '';
+            if (document.getElementById('filterWeek')) document.getElementById('filterWeek').value = '';
+            renderReportsList();
+        };
+
+        window.handleReportSubmit = async function(e) {
+            e.preventDefault();
+
+            const projId = document.getElementById('formProjectId').value;
+            const project = window.appState.projects.find(p => p.id === projId);
+            const author = document.getElementById('formAuthor').value;
+            const week = document.getElementById('formWeek').value;
+            const progress = Number(document.getElementById('formProgress').value) || (project ? project.progress : 0);
+            const thisWeek = document.getElementById('formThisWeek').value;
+            const nextWeek = document.getElementById('formNextWeek').value;
+            const issues = document.getElementById('formIssues').value;
+
+            // Encrypt sensitive fields before database transmission
+            const newReport = {
+                id: 'rep-' + Date.now(),
+                projectId: projId,
+                projectName: project ? project.name : '기타 프로젝트',
+                author: author,
+                week: week,
+                progress: progress,
+                thisWeek: encryptText(thisWeek),
+                nextWeek: encryptText(nextWeek),
+                issues: encryptText(issues),
+                isEncrypted: true,
+                createdAt: new Date().toISOString()
+            };
+
+            // Firebase Firestore save or fallback
+            if (db) {
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', newReport.id), newReport);
+                    if (project) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', projId), { progress: progress });
+                    }
+                } catch (err) {
+                    console.warn("Firestore save failed, fallback to local state", err);
+                    window.appState.reports.unshift(newReport);
+                }
+            } else {
+                window.appState.reports.unshift(newReport);
+            }
+
+            logAudit(author, '주간업무 제출 (AES 암호화)', `[${project?.name}] ${week} 주차 보고서 암호화 저장 완료`);
+            showToast('주간 업무 보고서가 AES-256 암호화되어 안심 저장되었습니다.', 'success');
+
+            document.getElementById('reportForm').reset();
+            switchTab('tabDashboard');
+            updateAllUI();
+        };
+
+        window.handleProjectSubmit = async function(e) {
+            e.preventDefault();
+
+            const name = document.getElementById('newProjName').value;
+            const desc = document.getElementById('newProjDesc').value;
+            const lead = document.getElementById('newProjLead').value;
+            const progress = Number(document.getElementById('newProjProgress').value) || 0;
+            const status = document.getElementById('newProjStatus').value;
+
+            const newProj = {
+                id: 'proj-' + Date.now(),
+                name: name,
+                desc: desc,
+                lead: lead,
+                progress: progress,
+                status: status,
+                createdAt: new Date().toISOString()
+            };
+
+            if (db) {
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', newProj.id), newProj);
+                } catch (err) {
+                    window.appState.projects.unshift(newProj);
+                }
+            } else {
+                window.appState.projects.unshift(newProj);
+            }
+
+            logAudit(window.appState.role, '신규 프로젝트 추가', `[${name}] 프로젝트 생성`);
+            showToast(`'${name}' 프로젝트가 추가되었습니다.`, 'success');
+
+            closeModal('modalProjectNew');
+            updateAllUI();
+        };
+
+        window.generateExecutiveSummary = function() {
+            const targetWeek = document.getElementById('execFilterWeek').value || getCurrentWeekString();
+            const filteredReports = window.appState.reports.filter(r => r.week === targetWeek);
+
+            document.getElementById('execReportMeta').textContent = `취합 대상주차: ${targetWeek} | 제출 건수: ${filteredReports.length}건 | 보안: AES-256 암호화 복호화됨`;
+
+            let output = `=================================================================\n`;
+            output += `              [주간 업무 종합 보고서 - ${targetWeek}]\n`;
+            output += `  작성일시: ${new Date().toLocaleString('ko-KR')} | 보안등급: 대외비 (AES-256 E2EE)\n`;
+            output += `=================================================================\n\n`;
+
+            if (filteredReports.length === 0) {
+                output += `해당 주차(${targetWeek})에 작성된 주간 업무 보고서가 없습니다.`;
+            } else {
+                // Group by project
+                const grouped = {};
+                filteredReports.forEach(r => {
+                    if (!grouped[r.projectName]) grouped[r.projectName] = [];
+                    grouped[r.projectName].push(r);
+                });
+
+                let pIdx = 1;
+                for (const [projName, reps] of Object.entries(grouped)) {
+                    const projObj = window.appState.projects.find(p => p.name === projName);
+                    const currentProgress = projObj ? projObj.progress : reps[0].progress;
+
+                    output += `${pIdx}. ${projName} (현재 진척도: ${currentProgress}%)\n`;
+                    output += `-----------------------------------------------------------------\n`;
+
+                    reps.forEach(r => {
+                        const decThis = decryptText(r.thisWeek);
+                        const decNext = decryptText(r.nextWeek);
+                        const decIssues = decryptText(r.issues);
+
+                        output += `■ 담당자: ${r.author}\n`;
+                        output += `  [금주 실적]\n${decThis.split('\n').map(line => '    ' + line).join('\n')}\n`;
+                        output += `  [차주 계획]\n${decNext.split('\n').map(line => '    ' + line).join('\n')}\n`;
+                        if (decIssues) {
+                            output += `  [특이사항/리스크]: ${decIssues}\n`;
+                        }
+                        output += `\n`;
+                    });
+                    pIdx++;
+                }
+            }
+
+            output += `\n=================================================================\n`;
+            output += `[총평 및 관리자 확인 사항]\n- 전체 ${window.appState.projects.length}개 프로젝트 중 ${filteredReports.length}개 업무 제출 완료.\n- 종합 보고서 취합 완료. 끝.`;
+
+            document.getElementById('executiveOutput').value = output;
+        };
+
+        window.copyExecutiveSummary = function() {
+            const output = document.getElementById('executiveOutput');
+            output.select();
+            document.execCommand('copy');
+            showToast('전체 취합 요약문이 클립보드에 복사되었습니다.', 'success');
+            logAudit('ADMIN', '보고서 복사', '종합 주간 업무 요약문 복사 완료');
+        };
+
+        window.toggleWatermark = function(val) {
+            const wm = document.getElementById('securityWatermark');
+            if (val === 'OFF') {
+                wm.style.display = 'none';
+            } else {
+                wm.style.display = 'block';
+                wm.textContent = val;
+            }
+            logAudit(window.appState.role, '보안 설정 변경', `워터마크 설정: ${val}`);
+        };
+
+        window.updateAdminPin = function() {
+            const newPin = document.getElementById('inputAdminPin').value;
+            if (newPin && newPin.length >= 4) {
+                window.appState.adminPin = newPin;
+                showToast('관리자 PIN 번호가 변경되었습니다.', 'success');
+                logAudit('ADMIN', '비밀번호 변경', '관리자 PIN 수정');
+            } else {
+                showToast('비밀번호는 최소 4자리 이상이어야 합니다.', 'error');
+            }
+        };
+
+        window.updateSecretKey = function() {
+            const newKey = document.getElementById('inputSecretKey').value;
+            if (newKey && newKey.trim().length >= 4) {
+                window.appState.secretKey = newKey.trim();
+                showToast('워크스페이스 복호화 보안키가 적용되었습니다.', 'success');
+                logAudit(window.appState.role, '보안키 변경', '데이터 복호화 패스프레이즈 갱신');
+                renderReportsList();
+            } else {
+                showToast('보안키는 최소 4자 이상 입력해야 합니다.', 'error');
+            }
+        };
+
+        window.exportToCSV = function() {
+            let csv = "\uFEFF주차,프로젝트명,담당자,금주실적,차주계획,진척률,이슈사항\n";
+            window.appState.reports.forEach(r => {
+                const decThis = decryptText(r.thisWeek);
+                const decNext = decryptText(r.nextWeek);
+                const decIssues = decryptText(r.issues);
+                csv += `"${r.week}","${r.projectName}","${r.author}","${decThis.replace(/"/g, '""')}","${decNext.replace(/"/g, '""')}","${r.progress}%","${decIssues.replace(/"/g, '""')}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `주간업무보고서_통합_${getCurrentWeekString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            logAudit(window.appState.role, '데이터 내보내기', '복호화된 CSV 엑셀 파일 내보내기 수행');
+        };
+
+        window.promptEditProgress = async function(projId, currentProgress) {
+            const newProg = prompt(`새로운 진척률(%)을 입력하세요 (현재: ${currentProgress}%):`, currentProgress);
+            if (newProg !== null && !isNaN(newProg)) {
+                const progNum = Math.min(100, Math.max(0, Number(newProg)));
+                const project = window.appState.projects.find(p => p.id === projId);
+                if (project) {
+                    project.progress = progNum;
+                    if (db) {
+                        try {
+                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', projId), { progress: progNum });
+                        } catch(e){}
+                    }
+                    updateAllUI();
+                    showToast('프로젝트 진척률이 변경되었습니다.', 'success');
+                    logAudit('ADMIN', '진척률 수정', `[${project.name}] ${progNum}%로 수정`);
+                }
+            }
+        };
+
+        window.deleteReport = async function(repId) {
+            if (confirm('이 주간업무 보고서를 삭제하시겠습니까?')) {
+                if (db) {
+                    try {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', repId));
+                    } catch(e){}
+                }
+                window.appState.reports = window.appState.reports.filter(r => r.id !== repId);
+                updateAllUI();
+                showToast('보고서가 삭제되었습니다.', 'info');
+                logAudit(window.appState.role, '보고서 삭제', `보고서 ID (${repId}) 삭제`);
+            }
+        };
+
+        // Modal Utilities
+        window.openModal = function(id) { document.getElementById(id)?.classList.remove('hidden'); };
+        window.closeModal = function(id) { document.getElementById(id)?.classList.add('hidden'); };
+
+        window.onload = function() {
+            initFirebase();
+            updateAllUI();
+        };
+    </script>
+</body>
+</html>
